@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#173d35">
+<link rel="manifest" href="manifest.webmanifest">
+<title>영어 한 문장 따라읽기</title>
+<style>
+:root{--green:#173d35;--mint:#eaf4ef;--ink:#182622;--muted:#687771;--line:#dce7e1;--orange:#d97732}
+*{box-sizing:border-box} body{margin:0;background:#f5f8f6;color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif}
+main{max-width:620px;margin:auto;padding:20px 17px 40px}
+header{background:var(--green);color:white;padding:22px 20px;border-radius:22px}
+header small{opacity:.8} h1{font-size:23px;margin:6px 0} header p{margin:0;opacity:.85;font-size:14px}
+.panel{background:white;border:1px solid var(--line);border-radius:20px;padding:19px;margin-top:15px;box-shadow:0 4px 18px #153d3510}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}.muted{color:var(--muted);font-size:13px}
+.progress{height:7px;background:#e9efeb;border-radius:20px;overflow:hidden;margin:12px 0}.bar{height:100%;background:#4d9278;width:0}
+.sentence{font-size:25px;line-height:1.55;font-weight:650;margin:18px 0 10px;letter-spacing:-.3px}
+.word{display:inline-block;padding:0 2px;border-radius:5px}.word.bad{background:#ffe6dc;color:#a63b1e;text-decoration:underline;text-decoration-color:#d97732;text-underline-offset:4px}
+button{border:0;border-radius:14px;padding:13px 15px;font-size:15px;font-weight:650;cursor:pointer}
+.primary{background:var(--green);color:white}.soft{background:var(--mint);color:var(--green)}.orange{background:#fff0e5;color:#a64e17}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:15px}.controls button{min-height:48px}
+.mic{grid-column:1/-1;background:#d97732;color:white;font-size:17px;min-height:55px}
+button:disabled{opacity:.45;cursor:not-allowed}
+.result{background:#f5f8f6;border-radius:14px;padding:14px;margin-top:14px;line-height:1.6;font-size:14px}
+.good{color:#20734d;font-weight:700}.badtext{color:#b44c2b;font-weight:700}
+.words{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.chip{border:1px solid var(--line);border-radius:20px;padding:6px 10px;font-size:13px;background:white}
+footer{font-size:12px;color:var(--muted);line-height:1.6;padding:15px 4px}
+select{padding:9px;border:1px solid var(--line);border-radius:10px;background:white;color:var(--ink)}
+#heard{font-style:italic;color:#46564f}
+</style>
+</head>
+<body>
+<main>
+<header>
+ <small>MY ENGLISH READING · ANDROID</small>
+ <h1>영어 한 문장 따라읽기</h1>
+ <p>듣고 → 따라 읽고 → 인식 결과를 확인해요.</p>
+</header>
+
+<section class="panel">
+ <div class="row"><strong>오늘의 책</strong><span class="muted">The Boy Who Cried Wolf</span></div>
+ <div class="row" style="margin-top:14px"><span id="count" class="muted">1 / 4 문장</span><span id="saved" class="muted">진행률 0%</span></div>
+ <div class="progress"><div class="bar" id="bar"></div></div>
+ <div class="row"><span class="muted">읽기 속도</span>
+ <select id="rate"><option value=".8">천천히</option><option value="1" selected>보통</option><option value="1.1">조금 빠르게</option></select></div>
+ <div class="sentence" id="sentence"></div>
+ <div class="muted">단어를 누르면 그 단어만 들을 수 있어요.</div>
+ <div class="controls">
+  <button class="soft" id="listen">🔊 문장 듣기</button>
+  <button class="soft" id="again">↻ 다시 듣기</button>
+  <button class="mic" id="record">🎙️ 따라 읽기 시작</button>
+  <button class="soft" id="prev">← 이전 문장</button>
+  <button class="primary" id="next">다음 문장 →</button>
+ </div>
+ <div class="result" id="result" aria-live="polite">
+  <strong>읽기 연습 방법</strong><br>① 문장을 먼저 들어보세요.<br>② 마이크를 누르고 같은 문장을 읽으세요.<br>③ 인식된 문장과 다른 단어를 확인하세요.
+ </div>
+</section>
+<section class="panel">
+ <strong>간단 발음 피드백</strong>
+ <p class="muted">틀린 것으로 인식된 단어는 아래에 표시돼요. 단어를 눌러 다시 들어보세요.</p>
+ <div class="words" id="wordlist"><span class="muted">아직 연습 결과가 없어요.</span></div>
+</section>
+<footer>
+이 첫 버전은 휴대폰 음성인식 결과로 단어 일치 여부를 확인하는 연습용 앱이에요. 실제 원어민 발음과 음소·강세를 정밀 채점하는 기능은 아직 아니에요. 음성인식은 인터넷 연결과 마이크 권한이 필요하며, 브라우저에 따라 지원되지 않을 수 있어요.
+</footer>
+</main>
+<script>
+const lessons = [
+"It is a warm sunny afternoon.",
+"Freddy sits under a tree.",
+"He watches the village sheep.",
+"The sheep walk and eat grass lazily around the field."
+];
+let index=0, recognition=null, listening=false, completed=new Set();
+const $=id=>document.getElementById(id);
+function render(){
+ const sentence=lessons[index];
+ $("count").textContent=`${index+1} / ${lessons.length} 문장`;
+ $("saved").textContent=`진행률 ${Math.round(completed.size/lessons.length*100)}%`;
+ $("bar").style.width=`${completed.size/lessons.length*100}%`;
+ $("sentence").innerHTML="";
+ sentence.split(/(\s+)/).forEach(part=>{
+   if(!part.trim()){ $("sentence").append(document.createTextNode(part)); return; }
+   const span=document.createElement("span"); span.className="word"; span.textContent=part;
+   span.onclick=()=>speak(part.replace(/[.,!?;:]/g,""));
+   $("sentence").append(span);
+ });
+ $("result").innerHTML="문장을 먼저 듣고 마이크 버튼을 눌러 따라 읽어보세요.";
+ $("wordlist").innerHTML='<span class="muted">아직 연습 결과가 없어요.</span>';
+ $("prev").disabled=index===0; $("next").textContent=index===lessons.length-1?"처음으로 ↺":"다음 문장 →";
+}
+function speak(text){
+ if(!("speechSynthesis" in window)){alert("이 브라우저에서는 음성 재생을 지원하지 않아요.");return;}
+ speechSynthesis.cancel();
+ const u=new SpeechSynthesisUtterance(text);u.lang="en-US";u.rate=Number($("rate").value);speechSynthesis.speak(u);
+}
+function normalize(s){return s.toLowerCase().replace(/[^a-z'\s]/g," ").replace(/\s+/g," ").trim().split(" ").filter(Boolean)}
+function compare(expected,heard){
+ const a=normalize(expected), b=normalize(heard), n=Math.max(a.length,b.length);
+ const bad=[];
+ a.forEach((w,i)=>{if(b[i]!==w)bad.push({word:w,heard:b[i]||"인식 안 됨"})});
+ const extras=b.slice(a.length);
+ const matched=a.filter((w,i)=>b[i]===w).length;
+ const score=Math.round(matched/Math.max(a.length,1)*100);
+ completed.add(index);
+ $("saved").textContent=`진행률 ${Math.round(completed.size/lessons.length*100)}%`;
+ $("bar").style.width=`${completed.size/lessons.length*100}%`;
+ $("result").innerHTML=`<div class="${score>=85?'good':'badtext'}">단어 일치도(참고): ${score}%</div><div style="margin-top:7px">내가 말한 것으로 인식된 문장:<br><span id="heard">${heard||"인식된 내용이 없어요."}</span></div>`;
+ $("wordlist").innerHTML="";
+ if(!bad.length && !extras.length){$("wordlist").innerHTML='<span class="good">좋아요! 문장이 모두 일치해요.</span>';}
+ else {
+   bad.forEach(x=>{const c=document.createElement("button");c.className="chip";c.innerHTML=`<span class="badtext">${x.word}</span> · 다시 듣기`;c.onclick=()=>speak(x.word);$("wordlist").append(c)});
+   extras.forEach(x=>{const c=document.createElement("span");c.className="chip";c.textContent=`추가 인식: ${x}`;$("wordlist").append(c)});
+   $("result").innerHTML+=`<div style="margin-top:8px">표시된 단어를 눌러 듣고 다시 읽어보세요.</div>`;
+ }
+}
+function startRecognition(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){$("result").innerHTML='<span class="badtext">이 브라우저는 음성인식을 지원하지 않아요.</span><br>Chrome 최신 버전에서 다시 시도해 주세요.';return;}
+ if(listening){recognition.stop();return;}
+ recognition=new SR();recognition.lang="en-US";recognition.interimResults=false;recognition.maxAlternatives=1;
+ recognition.onstart=()=>{listening=true;$("record").textContent="■ 듣는 중… 누르면 종료"};
+ recognition.onend=()=>{listening=false;$("record").textContent="🎙️ 다시 따라 읽기"};
+ recognition.onerror=e=>{$("result").textContent="음성인식 오류: "+e.error+". 마이크 권한과 인터넷 연결을 확인해 주세요."};
+ recognition.onresult=e=>compare(lessons[index],e.results[0][0].transcript);
+ recognition.start();
+}
+$("listen").onclick=()=>speak(lessons[index]);
+$("again").onclick=()=>speak(lessons[index]);
+$("record").onclick=startRecognition;
+$("prev").onclick=()=>{if(index>0){index--;render()}};
+$("next").onclick=()=>{index=index===lessons.length-1?0:index+1;render()};
+render();
+if("serviceWorker" in navigator && location.protocol.startsWith("http")) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+</script>
+</body></html>
